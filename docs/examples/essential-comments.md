@@ -1,19 +1,16 @@
 # essential-comments - before / after
 
-Two jobs, same skill:
+The task is to ship a checkout path. The code is already readable, but the ticket carries three facts that names alone cannot recover:
 
-1. **Cleanup** - strip narration and echo-docs; keep real whys.
-2. **Greenfield / silent default** - file has no remarks (typical "clean code" agent). When non-local facts are known (task, ticket, runbook), the skill still **adds** short whys. It does not guess.
+- `force` is an operations override for VIP oversell.
+- Inventory must be reserved before charging so concurrent checkouts cannot both pass the stock check. A brief over-hold is acceptable because charge failure restores stock.
+- Confirmation waits 2000 ms because the Stripe webhook can race the read model (`#1842`).
 
-No JSDoc mandate. No renames (that is a different skill). Snippets show comment shape, not a full module.
+The ticket says nothing special about `dryRun`, money formatting, or the obvious restore assignment.
 
----
+## Without the skill - useful context disappears
 
-## 1. Greenfield - silent baseline vs skill
-
-Facts known from the task / ticket (not visible in names alone): `force` is VIP oversell; reserve stock before charge for concurrency; `2000` ms is Stripe + `#1842`.
-
-**Without** (model default: ship bare code)
+A clean-looking implementation may contain no comments at all:
 
 ```ts
 export function handleCheckout(
@@ -21,6 +18,7 @@ export function handleCheckout(
   opts: { dryRun?: boolean; force?: boolean } = {},
 ): boolean {
   if (!req.productId || req.qty <= 0) return false;
+
   const stock = inventory[req.productId] ?? 0;
   if (stock < req.qty && !opts.force) return false;
   if (opts.dryRun) return true;
@@ -42,7 +40,9 @@ export function formatMoney(cents: number): string {
 }
 ```
 
-**With** (skill: add only what a later reader would lose)
+The control flow is visible, but the policy and external constraints are not. A later maintainer can easily "simplify" the reserve order, remove the delay, or assume `force` is a generic bypass.
+
+## With the skill - add only what a human would lose
 
 ```ts
 export function handleCheckout(
@@ -50,14 +50,15 @@ export function handleCheckout(
   opts: { dryRun?: boolean; force?: boolean } = {},
 ): boolean {
   if (!req.productId || req.qty <= 0) return false;
+
   const stock = inventory[req.productId] ?? 0;
 
-  // force: ops override for VIP oversell
+  // force is the operations override for VIP oversell.
   if (stock < req.qty && !opts.force) return false;
   if (opts.dryRun) return true;
 
   // Reserve before charge so concurrent checkouts cannot both pass the
-  // stock check; brief over-hold is OK if charge fails and we roll back.
+  // stock check. Charge failure restores the accepted brief over-hold.
   inventory[req.productId] = stock - req.qty;
   try {
     charge(req.userId, req.unitPrice * req.qty);
@@ -66,7 +67,7 @@ export function handleCheckout(
     return false;
   }
 
-  // Stripe settles ~2s; webhook can race our row (see #1842).
+  // Stripe webhook delivery can race the read model; see #1842.
   scheduleConfirm(req.orderId, { afterMs: 2000 });
   return true;
 }
@@ -76,256 +77,79 @@ export function formatMoney(cents: number): string {
 }
 ```
 
-Still uncommented on purpose: `dryRun` (name is enough), `formatMoney` (obvious arithmetic), the restore assign in `catch` (shape is obvious).
+Production behavior, names, structure, and APIs are unchanged. Only three non-local facts were added.
 
-Same idea in Python when the legacy `mode` int and partial-success policy are known:
+| Comment | Why it earns its place |
+| --- | --- |
+| VIP oversell | Defines policy and who owns the override |
+| Reserve before charge | Protects a concurrency invariant and explains the rollback tradeoff |
+| Stripe race and `#1842` | Records an external timing constraint and its source |
 
-**Without**
+Still uncommented on purpose:
 
-```python
-def process(d: dict, flag: bool = True, mode: int = 0):
-    uid, amt = d["uid"], d["amt"]
-    if mode == 1:
-        bal = _wallets.get(uid, 0) + amt
-        _wallets[uid] = bal
-        if flag:
-            send(uid, amt)  # may raise; wallet already credited
-        return bal
-    ...
-```
+- `dryRun` already says what it does.
+- `formatMoney` is obvious arithmetic.
+- restoring `inventory[req.productId] = stock` is visible in the `catch`.
+- validation and `return true` do not need narration.
 
-**With**
+## The same skill removes noise
 
-```python
-def process(d: dict, flag: bool = True, mode: int = 0):
-    # mode: 0=noop-ish, 1=credit, 2=debit
-    uid, amt = d["uid"], d["amt"]
-    if mode == 1:
-        bal = _wallets.get(uid, 0) + amt
-        _wallets[uid] = bal
-        if flag:
-            # Provider may fail above 10_000; credit is kept
-            # (partial success intentional - billing runbook).
-            send(uid, amt)
-        return bal
-    ...
-```
-
----
-
-## 2. Cleanup - noisy baseline vs skill
-
-### TypeScript
-
-**Without**
+Suppose the same function arrives with generated documentation and line-by-line narration:
 
 ```ts
 /**
- * Process a checkout request and return whether it succeeded.
- * @param req - the checkout request
- * @returns true if ok
+ * Handle a checkout request.
+ * @param req The checkout request.
+ * @returns Whether checkout succeeded.
  */
 export function handleCheckout(
   req: CheckoutReq,
   opts: { dryRun?: boolean; force?: boolean } = {},
 ): boolean {
-  // Check if request is valid
+  // Validate the request.
   if (!req.productId || req.qty <= 0) return false;
 
-  // Get current stock level
+  // Get the stock.
   const stock = inventory[req.productId] ?? 0;
 
-  // Allow oversell only when force is set (ops override for VIP)
+  // Check whether oversell is allowed.
   if (stock < req.qty && !opts.force) return false;
 
-  // Dry run: validate only, do not mutate
+  // Return early for a dry run.
   if (opts.dryRun) return true;
 
-  // Decrement inventory before charge so two concurrent checkouts
-  // cannot both pass the stock check (we accept brief over-hold on charge fail).
-  inventory[req.productId] = stock - req.qty; // subtract qty from stock
+  // Reserve before charge so concurrent checkouts cannot both pass the
+  // stock check. Charge failure restores the accepted brief over-hold.
+  inventory[req.productId] = stock - req.qty; // Subtract quantity.
 
   try {
-    // Charge the user
+    // Charge the user.
     charge(req.userId, req.unitPrice * req.qty);
   } catch {
-    // Rollback inventory on payment failure
+    // Restore the stock.
     inventory[req.productId] = stock;
-    return false; // payment failed
+    return false; // Checkout failed.
   }
 
-  // Stripe settles in 2s; webhook may arrive before our row is visible.
-  // Delay confirm publish so the read model is caught up (see #1842).
+  // Stripe webhook delivery can race the read model; see #1842.
   scheduleConfirm(req.orderId, { afterMs: 2000 });
 
-  // Return success
+  // Return success.
   return true;
-}
-
-// Helper to format cents as dollars
-export function formatMoney(cents: number): string {
-  // Divide by 100 to convert cents to dollars
-  return (cents / 100).toFixed(2);
 }
 ```
 
-**With**
+The cleanup is a comment-only change. Delete the echo-docs and narration; retain the reserve-order invariant and Stripe constraint. If the VIP meaning is known from the task, retain that too. Do not rename the function, restructure the flow, or invent a new documentation convention while performing comment cleanup.
+
+## What the skill does not guess
+
+A comment is not a place to manufacture missing context:
 
 ```ts
-export function handleCheckout(
-  req: CheckoutReq,
-  opts: { dryRun?: boolean; force?: boolean } = {},
-): boolean {
-  if (!req.productId || req.qty <= 0) return false;
-
-  const stock = inventory[req.productId] ?? 0;
-
-  // Allow oversell only when force is set (ops override for VIP)
-  if (stock < req.qty && !opts.force) return false;
-
-  if (opts.dryRun) return true;
-
-  // Decrement inventory before charge so two concurrent checkouts
-  // cannot both pass the stock check (we accept brief over-hold on charge fail).
-  inventory[req.productId] = stock - req.qty;
-
-  try {
-    charge(req.userId, req.unitPrice * req.qty);
-  } catch {
-    inventory[req.productId] = stock;
-    return false;
-  }
-
-  // Stripe settles in 2s; webhook may arrive before our row is visible.
-  // Delay confirm publish so the read model is caught up (see #1842).
-  scheduleConfirm(req.orderId, { afterMs: 2000 });
-
-  return true;
-}
-
-export function formatMoney(cents: number): string {
-  return (cents / 100).toFixed(2);
-}
+// Admin-only emergency bypass for enterprise customers.
+if (stock < req.qty && !opts.force) return false;
 ```
 
-### Python
+Nothing in the task established "admin", "emergency", or "enterprise". The honest choice is the known VIP-operations fact, or no comment if that fact is unavailable.
 
-**Without**
-
-```python
-def process(d: dict, flag: bool = True, mode: int = 0):
-    """Process a wallet operation.
-
-    Args:
-        d: the payload dict
-        flag: whether to notify
-        mode: 0=noop-ish, 1=credit, 2=debit
-    """
-    try:
-        # Get the user id from the dict
-        uid = d["uid"]
-        amt = d["amt"]
-
-        # Mode 1 means credit
-        if mode == 1:
-            bal = _wallets.get(uid, 0) + amt
-            _wallets[uid] = bal
-            if flag:
-                # Provider drops silently above 10_000; we still keep the credit
-                # (partial success is intentional - see billing runbook).
-                send(uid, amt)
-            return bal
-        ...
-    except Exception:
-        # Something went wrong
-        return False
-```
-
-**With**
-
-```python
-def process(d: dict, flag: bool = True, mode: int = 0):
-    # mode: 0=noop-ish, 1=credit, 2=debit
-    try:
-        uid = d["uid"]
-        amt = d["amt"]
-
-        if mode == 1:
-            bal = _wallets.get(uid, 0) + amt
-            _wallets[uid] = bal
-            if flag:
-                # Provider drops silently above 10_000; we still keep the credit
-                # (partial success is intentional - see billing runbook).
-                send(uid, amt)
-            return bal
-        ...
-    except Exception:
-        return False
-```
-
-### Go
-
-**Without**
-
-```go
-// HandleCheckout processes a checkout request and returns whether it succeeded.
-func HandleCheckout(req CheckoutReq, dryRun bool, force bool) bool {
-    // Check if request is valid
-    if req.ProductID == "" || req.Qty <= 0 {
-        return false
-    }
-    stock := inventory[req.ProductID]
-    // Allow oversell only when force is set (ops override for VIP)
-    if stock < req.Qty && !force {
-        return false
-    }
-    if dryRun {
-        return true
-    }
-    // Reserve before charge so concurrent checkouts cannot both pass the stock check.
-    inventory[req.ProductID] = stock - req.Qty
-    if err := Charge(req.UserID, req.UnitPrice*req.Qty); err != nil {
-        inventory[req.ProductID] = stock // rollback on payment failure
-        return false
-    }
-    // Stripe settles in 2s; webhook may arrive before our row is visible (#1842).
-    ScheduleConfirm(req.OrderID, 2000)
-    return true // success
-}
-```
-
-**With**
-
-```go
-func HandleCheckout(req CheckoutReq, dryRun bool, force bool) bool {
-    if req.ProductID == "" || req.Qty <= 0 {
-        return false
-    }
-    stock := inventory[req.ProductID]
-    // Allow oversell only when force is set (ops override for VIP)
-    if stock < req.Qty && !force {
-        return false
-    }
-    if dryRun {
-        return true
-    }
-    // Reserve before charge so concurrent checkouts cannot both pass the stock check.
-    inventory[req.ProductID] = stock - req.Qty
-    if err := Charge(req.UserID, req.UnitPrice*req.Qty); err != nil {
-        inventory[req.ProductID] = stock
-        return false
-    }
-    // Stripe settles in 2s; webhook may arrive before our row is visible (#1842).
-    ScheduleConfirm(req.OrderID, 2000)
-    return true
-}
-```
-
----
-
-## Cheat sheet
-
-| Direction | Do | Don't |
-| --- | --- | --- |
-| Greenfield | Add VIP/`force`, reserve-before-charge, Stripe `#1842`, partial-success + runbook, one `mode:` legend | Comment `dryRun`, `formatMoney`, obvious restore; invent "admin" |
-| Cleanup | Keep the same whys | Narration, echo JSDoc/Args, `// payment failed`, per-branch mode labels |
+The result is neither "comment everything" nor "comments are a smell." It is a narrow rule: preserve facts a human cannot reconstruct from the code, and remove prose that merely repeats it.

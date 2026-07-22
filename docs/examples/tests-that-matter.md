@@ -1,99 +1,165 @@
 # tests-that-matter - before / after
 
-Two jobs, same skill:
+The task is tests only:
 
-1. **Review / fix** - strip mock theater and weak asserts; prove outcomes, failures, state.
-2. **Greenfield** - from known invariants and failure modes, add the few cases that would catch real bugs.
+> Improve confidence in `processTransfer` without changing production behavior.
 
-No arbitrary coverage target. Meet repository gates, but optimize for confidence rather than percentage. No TDD ritual. Snippets show test shape, not a full suite.
-
----
-
-## 1. Mock theater -> observable outcomes
-
-Service moves balances, then notifies. Notify can fail after the transfer commits (partial success). API shape is a result object throughout.
-
-**Without** (looks thorough, proves little)
+The production contract is already fixed:
 
 ```ts
-it("processTransfer calls deps in order", async () => {
-  const wallets = { get: vi.fn(), save: vi.fn() };
+type TransferResult =
+  | { ok: true }
+  | { ok: false; error: "validation_error" }
+  | { ok: false; error: "not_found" }
+  | { ok: false; error: "notify_failed"; committed: true };
+```
+
+A transfer debits one wallet, credits another, then notifies an external provider. Notification can fail after both balances commit. The repository owns wallet persistence, so tests can use an in-memory fake. The provider is an external edge, so a narrow mock is appropriate.
+
+## Without the skill - green without confidence
+
+```ts
+it("processTransfer calls its dependencies", async () => {
+  const wallets = {
+    get: vi.fn(),
+    save: vi.fn(),
+  };
   const notify = vi.fn();
+
   wallets.get.mockResolvedValue({ id: "w1", balance: 100 });
-  await processTransfer({ from: "w1", to: "w2", amount: 40 }, { wallets, notify });
+
+  await processTransfer(
+    { from: "w1", to: "w2", amount: 40 },
+    { wallets, notify },
+  );
+
   expect(wallets.get).toHaveBeenCalledWith("w1");
   expect(wallets.save).toHaveBeenCalled();
   expect(notify).toHaveBeenCalled();
 });
 ```
 
-**With** (outcome + boundary effect + partial success)
+This test can stay green when important behavior is broken:
+
+- the wrong amount could move;
+- only one balance could be saved;
+- the result could report failure;
+- notification could contain the wrong transfer;
+- notification failure could accidentally roll back committed balances;
+- validation and missing-wallet failures could collapse together.
+
+It verifies the shape of one implementation, not the contract a caller or operator observes.
+
+## With the skill - prove outcomes and boundaries
+
+### Successful transfer
 
 ```ts
-it("moves balances and notifies on success", async () => {
-  const db = memoryWallets({ w1: 100, w2: 10 });
+it("moves balances and notifies the provider", async () => {
+  const wallets = memoryWallets({ w1: 100, w2: 10 });
   const notify = vi.fn().mockResolvedValue(undefined);
+
   const result = await processTransfer(
     { from: "w1", to: "w2", amount: 40 },
-    { wallets: db, notify },
+    { wallets, notify },
   );
+
   expect(result).toEqual({ ok: true });
-  expect(db.snapshot()).toEqual({ w1: 60, w2: 50 });
-  expect(notify).toHaveBeenCalledWith({ from: "w1", to: "w2", amount: 40 });
+  expect(wallets.snapshot()).toEqual({ w1: 60, w2: 50 });
+  expect(notify).toHaveBeenCalledWith({
+    from: "w1",
+    to: "w2",
+    amount: 40,
+  });
+});
+```
+
+The state assertion proves the domain outcome. The call assertion proves the real external boundary. Neither replaces the other.
+
+### Distinct failures
+
+```ts
+it("rejects a non-positive amount without changing balances", async () => {
+  const wallets = memoryWallets({ w1: 100, w2: 10 });
+  const notify = vi.fn();
+
+  const result = await processTransfer(
+    { from: "w1", to: "w2", amount: 0 },
+    { wallets, notify },
+  );
+
+  expect(result).toEqual({ ok: false, error: "validation_error" });
+  expect(wallets.snapshot()).toEqual({ w1: 100, w2: 10 });
+  expect(notify).not.toHaveBeenCalled();
 });
 
-it("keeps committed balances when notify fails after commit", async () => {
-  const db = memoryWallets({ w1: 100, w2: 10 });
-  const notify = vi.fn().mockRejectedValue(new Error("smtp down"));
+it("returns not_found when the source wallet is missing", async () => {
+  const wallets = memoryWallets({ w2: 10 });
+  const notify = vi.fn();
+
+  const result = await processTransfer(
+    { from: "missing", to: "w2", amount: 40 },
+    { wallets, notify },
+  );
+
+  expect(result).toEqual({ ok: false, error: "not_found" });
+  expect(wallets.snapshot()).toEqual({ w2: 10 });
+  expect(notify).not.toHaveBeenCalled();
+});
+```
+
+Both cases are failures, but they protect different policies. `expect(result.ok).toBe(false)` would hide that distinction.
+
+### Partial success
+
+```ts
+it("keeps committed balances when notification fails", async () => {
+  const wallets = memoryWallets({ w1: 100, w2: 10 });
+  const notify = vi.fn().mockRejectedValue(new Error("provider down"));
+
   const result = await processTransfer(
     { from: "w1", to: "w2", amount: 40 },
-    { wallets: db, notify },
+    { wallets, notify },
   );
-  expect(result).toEqual({ ok: false, error: "notify_failed", committed: true });
-  expect(db.snapshot()).toEqual({ w1: 60, w2: 50 });
+
+  expect(result).toEqual({
+    ok: false,
+    error: "notify_failed",
+    committed: true,
+  });
+  expect(wallets.snapshot()).toEqual({ w1: 60, w2: 50 });
+  expect(notify).toHaveBeenCalledWith({
+    from: "w1",
+    to: "w2",
+    amount: 40,
+  });
 });
 ```
 
-`notify` is mocked because it is the external edge. `memoryWallets` is a fake for owned state - not mock theater. Call asserts sit beside outcome checks; they do not replace them.
+The result and state must be asserted together. Checking only `notify` rejection misses the committed transfer; checking only balances misses the operational failure.
 
----
+## What confidence each test adds
 
-## 2. Collapsed failures -> distinct modes
+| Case | Observable contract | Regression caught |
+| --- | --- | --- |
+| Success | result, both balances, provider payload | wrong amount, one-sided write, missing or malformed notification |
+| Invalid amount | exact error, unchanged state, no notification | validation after mutation, collapsed error |
+| Missing source | exact error, unchanged state, no notification | accidental wallet creation, collapsed error |
+| Notify failure | exact partial-success result and committed state | hidden commit or invented rollback |
 
-Same result-object API on both sides. The upgrade is sharper asserts, not a new failure style.
+`memoryWallets` is a fake for an owned stateful collaborator. `notify` is mocked because it is the external edge. The tests do not assert private helper calls or internal save order.
 
-**Without**
+## A regression must fail before the fix
+
+Suppose `feeCents` used `Math.floor`, making small transfers free:
 
 ```ts
-it("rejects bad transfers", async () => {
-  const a = await processTransfer({ from: "w1", to: "w2", amount: -1 }, deps);
-  expect(a.ok).toBe(false);
-  const b = await processTransfer({ from: "missing", to: "w2", amount: 1 }, deps);
-  expect(b.ok).toBe(false);
-});
+export function feeCents(amount: number): number {
+  return Math.floor(amount * 0.01);
+}
 ```
 
-**With**
-
-```ts
-it("rejects non-positive amount as validation_error", async () => {
-  const result = await processTransfer({ from: "w1", to: "w2", amount: 0 }, deps);
-  expect(result).toEqual({ ok: false, error: "validation_error" });
-});
-
-it("returns not_found when source wallet is missing", async () => {
-  const result = await processTransfer({ from: "missing", to: "w2", amount: 1 }, deps);
-  expect(result).toEqual({ ok: false, error: "not_found" });
-});
-```
-
----
-
-## 3. False regression -> must fail on the old defect
-
-Bug: fee rounded with `Math.floor` so 99 cents became free on small transfers.
-
-**Without** (stays green on broken code)
+This looks relevant but stays green on the defect:
 
 ```ts
 it("applies a fee", () => {
@@ -101,30 +167,29 @@ it("applies a fee", () => {
 });
 ```
 
-**With**
+The focused boundary case fails before the fix:
 
 ```ts
-it("charges at least 1 cent fee on amounts under the percent step", () => {
-  // old bug: Math.floor(99 * 0.01) === 0
+it("charges at least one cent below the percentage step", () => {
   expect(feeCents(99)).toBe(1);
 });
 ```
 
----
+A regression test that also passes on the broken implementation is only documentation.
 
-## 4. Five copies -> one rule
+## Repeated examples should state one rule
 
-**Without**
+Five copied tests make the policy harder to scan:
 
 ```ts
-it("accepts 1", () => { expect(parseQty("1")).toBe(1); });
-it("accepts 2", () => { expect(parseQty("2")).toBe(2); });
-it("accepts 10", () => { expect(parseQty("10")).toBe(10); });
-it("rejects 0", () => { expect(parseQty("0")).toBeNull(); });
-it("rejects -1", () => { expect(parseQty("-1")).toBeNull(); });
+it("accepts 1", () => expect(parseQty("1")).toBe(1));
+it("accepts 2", () => expect(parseQty("2")).toBe(2));
+it("accepts 10", () => expect(parseQty("10")).toBe(10));
+it("rejects 0", () => expect(parseQty("0")).toBeNull());
+it("rejects -1", () => expect(parseQty("-1")).toBeNull());
 ```
 
-**With**
+One table exposes the meaningful boundaries:
 
 ```ts
 it.each([
@@ -137,3 +202,5 @@ it.each([
   expect(parseQty(raw)).toBe(expected);
 });
 ```
+
+The goal is not fewer tests at any cost. It is fewer tests whose assertions each protect an observable behavior, failure mode, invariant, or boundary that can actually regress.

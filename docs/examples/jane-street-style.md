@@ -1,172 +1,189 @@
 # jane-street-style - before / after
 
-Same job (debit a wallet, optionally notify a provider) under a typical agent cleanup vs this skill.
+The task is an intentional redesign, not an ordinary bug fix:
 
-**Look for:** domain verbs instead of `process`/`mode`/`flag`; distinct failures instead of one sentinel; partial success when the balance commits and notify fails; legacy entry points as thin adapters when call-shape must stay.
+> Make the wallet debit path explicit about its domain operation and failures. Add a clear API for new callers, but keep the legacy `process(d, flag, mode)` entry point and its observable behavior.
 
-Snippets are minimal on purpose - shape of the change, not a full module. GitHub has no reliable side-by-side code columns, so each language is **Without** then **With** (full syntax highlighting, works on mobile).
+The important behavior is already in production:
 
-## TypeScript
+- `mode !== 1` returns `false`.
+- Invalid payloads and missing wallets return `false`.
+- A successful debit returns the new balance.
+- Notification happens after the balance changes.
+- If notification fails, `process` returns `false`, but the debit remains committed.
 
-**Without**
+## Starting point
 
 ```ts
-function process(d: any, flag = true, mode = 0): any {
+const wallets: Record<string, number> = {};
+
+declare function notifyProvider(userId: string, delta: number): void;
+
+export function process(d: any, flag = true, mode = 0): any {
   try {
-    if (mode === 1) {
-      const bal = cache[d.uid] - d.amt;
-      cache[d.uid] = bal;
-      if (flag) send(d.uid, -d.amt); // may throw after bal changed
-      return bal;
+    if (mode !== 1) return false;
+    if (
+      typeof d.uid !== "string" ||
+      typeof d.amt !== "number" ||
+      d.amt <= 0 ||
+      !(d.uid in wallets)
+    ) {
+      return false;
     }
-    /* ... */
+
+    const bal = wallets[d.uid] - d.amt;
+    wallets[d.uid] = bal;
+    if (flag) notifyProvider(d.uid, -d.amt);
+    return bal;
   } catch {
-    return false; // validation, infra, bug: one bucket
+    return false;
   }
 }
 ```
 
-**With**
+The code works, but its public meaning is hidden behind `process`, `d`, `flag`, `mode`, `any`, and one `false` for every failure.
+
+## Without the skill - cosmetic clarity
+
+A surface cleanup may improve spelling while keeping the same ambiguity:
 
 ```ts
-function debitWallet(
+export function updateWallet(
+  payload: any,
+  shouldNotify = true,
+  operation = 0,
+): any {
+  try {
+    if (operation !== 1) return false;
+    if (!isValidPayload(payload)) return false;
+
+    const newBalance = wallets[payload.userId] - payload.amount;
+    wallets[payload.userId] = newBalance;
+    if (shouldNotify) notifyProvider(payload.userId, -payload.amount);
+    return newBalance;
+  } catch {
+    return false;
+  }
+}
+```
+
+The names are longer, but callers still cannot tell:
+
+- which operation `1` selects;
+- whether `false` means invalid input, missing wallet, or provider failure;
+- whether a failed result changed the balance;
+- whether the old `process` entry point still exists.
+
+Renaming alone does not make the failure and effect model honest.
+
+## With the skill - clear core, compatibility at the boundary
+
+The new API names the domain operation and exposes distinct failures:
+
+```ts
+export class InvalidDebit extends Error {
+  constructor(readonly amount: number) {
+    super(`debit amount must be positive: ${amount}`);
+    this.name = "InvalidDebit";
+  }
+}
+
+export class WalletNotFound extends Error {
+  constructor(readonly userId: string) {
+    super(`wallet not found: ${userId}`);
+    this.name = "WalletNotFound";
+  }
+}
+
+export class NotifyFailedAfterDebit extends Error {
+  constructor(
+    readonly userId: string,
+    readonly balance: number,
+    readonly cause: unknown,
+  ) {
+    super(`wallet ${userId} debited; notification failed`);
+    this.name = "NotifyFailedAfterDebit";
+  }
+}
+
+export function debitWallet(
   userId: string,
   amount: number,
   opts: { notify?: boolean } = {},
 ): number {
-  const balance = wallets[userId] - amount;
+  if (amount <= 0) throw new InvalidDebit(amount);
+
+  if (!(userId in wallets)) throw new WalletNotFound(userId);
+  const currentBalance = wallets[userId];
+
+  const balance = currentBalance - amount;
   wallets[userId] = balance;
+
   if (opts.notify ?? true) {
     try {
       notifyProvider(userId, -amount);
-    } catch (err) {
-      throw new NotifyFailedAfterDebit(userId, balance, err);
+    } catch (cause) {
+      throw new NotifyFailedAfterDebit(userId, balance, cause);
     }
   }
+
   return balance;
 }
-
-// legacy adapter keeps old sentinels / call-shape
-function process(d: any, flag = true, mode = 0): any { /* ... */ }
 ```
 
-## Go
+The old API remains as a complete adapter, not a comment or an ellipsis:
 
-**Without**
-
-```go
-func Process(d map[string]any, flag bool, mode int) any {
-    defer func() { recover() }() // everything -> nil/false
-    if mode == 1 {
-        uid := d["uid"].(string)
-        amt := d["amt"].(int)
-        bal := cache[uid] - amt
-        cache[uid] = bal
-        if flag {
-            Send(uid, -amt) // error after bal changed is lost
-        }
-        return bal
+```ts
+export function process(d: any, flag = true, mode = 0): any {
+  try {
+    if (mode !== 1) return false;
+    if (
+      typeof d.uid !== "string" ||
+      typeof d.amt !== "number" ||
+      d.amt <= 0
+    ) {
+      return false;
     }
-    return false
+
+    return debitWallet(d.uid, d.amt, { notify: Boolean(flag) });
+  } catch {
+    return false;
+  }
 }
 ```
 
-**With**
+## What changed, and what did not
 
-```go
-func DebitWallet(userID string, amount int, notify bool) (int, error) {
-    bal := wallets[userID] - amount
-    wallets[userID] = bal
-    if notify {
-        if err := NotifyProvider(userID, -amount); err != nil {
-            return bal, fmt.Errorf("debit ok, notify failed: %w", err)
-        }
-    }
-    return bal, nil
-}
+| Concern | New `debitWallet` API | Legacy `process` API |
+| --- | --- | --- |
+| Domain operation | Named directly | `mode === 1` still selects it |
+| Invalid amount | `InvalidDebit` | `false` |
+| Missing wallet | `WalletNotFound` | `false` |
+| Debit succeeds, notify fails | `NotifyFailedAfterDebit` carries committed balance | `false`, with debit still committed |
+| Notification order | After balance update | Unchanged through the adapter |
+| Default notification | Enabled | `flag = true`, unchanged |
+| Call-shape | Clear API for new callers | `(d, flag, mode)`, unchanged |
 
-// Process remains a legacy adapter when callers need the old shape.
-```
+The adapter deliberately collapses richer failures because existing callers already depend on that contract. New callers can use the explicit API without silently changing old ones.
 
-## Rust
+## Why the partial-success error matters
 
-**Without**
+If `notifyProvider` fails after `wallets[userId]` is updated, rollback would be a new business policy, not a refactor. Returning a generic failure from the new API would also hide committed state. `NotifyFailedAfterDebit` states both facts:
 
-```rust
-fn process(d: &Value, flag: bool, mode: i32) -> Value {
-    match std::panic::catch_unwind(|| {
-        if mode == 1 {
-            let uid = d["uid"].as_str().unwrap();
-            let amt = d["amt"].as_i64().unwrap();
-            let bal = cache[uid] - amt;
-            cache.insert(uid, bal);
-            if flag { send(uid, -amt); } // Err after debit discarded
-            return json!(bal);
-        }
-        json!(false)
-    }) {
-        Ok(v) => v,
-        Err(_) => json!(false),
-    }
-}
-```
+- the debit happened;
+- notification failed afterward.
 
-**With**
+That makes recovery decisions possible without changing effect order.
 
-```rust
-fn debit_wallet(
-    user_id: &str,
-    amount: i64,
-    notify: bool,
-) -> Result<i64, DebitError> {
-    let bal = wallets[user_id] - amount;
-    wallets.insert(user_id.into(), bal);
-    if notify {
-        notify_provider(user_id, -amount).map_err(|e| {
-            DebitError::NotifyFailedAfterDebit {
-                user_id: user_id.into(),
-                balance: bal,
-                source: e,
-            }
-        })?;
-    }
-    Ok(bal)
-}
+## The shape of the improvement
 
-// process() can stay as a compatibility adapter.
-```
+| Before | After |
+| --- | --- |
+| `process` | `debitWallet` for new callers, `process` adapter for compatibility |
+| `d.uid`, `d.amt` | `userId`, `amount` |
+| `flag` | `opts.notify` |
+| `mode === 1` in the core | domain operation selected by function name |
+| every failure becomes `false` | distinct native errors on the new API |
+| partial success is hidden | committed balance is carried by the notification error |
 
-## Python
-
-**Without**
-
-```python
-def process(d, flag=True, mode=0):
-    try:
-        if mode == 1:
-            bal = cache[d["uid"]] - d["amt"]
-            cache[d["uid"]] = bal
-            if flag:
-                send(d["uid"], -d["amt"])
-            return bal
-        ...
-    except Exception:
-        return False
-```
-
-**With**
-
-```python
-def debit_wallet(user_id: str, amount: int, *, notify: bool = True) -> int:
-    balance = wallets[user_id] - amount
-    wallets[user_id] = balance
-    if notify:
-        try:
-            notify_provider(user_id, -amount)
-        except ConnectionError as err:
-            raise NotifyFailedAfterDebit(user_id, balance) from err
-    return balance
-
-def process(d, flag=True, mode=0):  # legacy adapter
-    ...
-```
+This is a clarity-first redesign because changing the internal shape is the explicit task. For an ordinary shape-preserving bug fix, `surgical-changes` would be the better skill and this redesign would be out of scope.
