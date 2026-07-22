@@ -3,12 +3,35 @@
   "name": "yakoshiq-skills",
   "description": "Agent skills for intentional, reviewable code.",
   "owner": {
-    "name": "yakoshiq"
+    "name": "yakoshiq",
+    "url": "https://github.com/yakoshiq"
   },
   "plugins": [
     {
       "name": "intentional-code",
       "description": "Write intentional, reviewable code with clear behavior and controlled complexity.",
+      "author": {
+        "name": "yakoshiq",
+        "url": "https://github.com/yakoshiq"
+      },
+      "homepage": "https://github.com/yakoshiq/skills",
+      "repository": "https://github.com/yakoshiq/skills",
+      "license": "MIT",
+      "keywords": [
+        "code-quality",
+        "code-review",
+        "software-design",
+        "refactoring",
+        "testing",
+        "documentation"
+      ],
+      "category": "development",
+      "tags": [
+        "agent-skills",
+        "reviewability",
+        "maintainability"
+      ],
+      "strict": false,
       "source": "./",
       "skills": [
         "./skills/essential-comments",
