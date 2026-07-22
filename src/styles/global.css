@@ -1,0 +1,117 @@
+@import 'tailwindcss';
+@import '@fontsource-variable/jetbrains-mono';
+
+@theme {
+  --font-mono: 'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* light — warm paper, same rose family as the brand */
+  --color-paper: #faf6f7;
+  --color-card: #f4edef;
+  --color-ink: #2a1b21;
+  --color-faint: #90727d;
+  --color-line: #e8dade;
+  --color-rose: #b83a56;
+  --color-bad: #b14b4b;
+  --color-good: #5f7a52;
+  --color-bad-bg: #b14b4b14;
+  --color-good-bg: #5f7a5214;
+
+  /* dark — plum night lifted from the social preview */
+  --color-night: #110a0e;
+  --color-night-card: #180f14;
+  --color-snow: #efe0e6;
+  --color-dim: #a18690;
+  --color-seam: #2c1c23;
+  --color-bloom: #e2637f;
+  --color-dbad: #d66a6a;
+  --color-dgood: #8fa383;
+  --color-dbad-bg: #d66a6a12;
+  --color-dgood-bg: #8fa38312;
+}
+
+html {
+  font-family: var(--font-mono);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: #e2637f33;
+}
+
+/* shiki dual-theme: swap to the dark palette with the system theme */
+.astro-code,
+.astro-code span {
+  background-color: transparent !important;
+}
+/* IDE look: numbered lines on a neutral editor surface */
+.astro-code.ide {
+  margin: 0;
+  counter-reset: line;
+}
+.astro-code.ide .line::before {
+  counter-increment: line;
+  content: counter(line);
+  display: inline-block;
+  width: 2ch;
+  margin-right: 1.5ch;
+  text-align: right;
+  color: var(--color-faint);
+  opacity: 0.55;
+  user-select: none;
+}
+@media (prefers-color-scheme: dark) {
+  .astro-code.ide .line::before {
+    color: var(--color-dim);
+  }
+}
+@media (prefers-color-scheme: dark) {
+  .astro-code,
+  .astro-code span {
+    color: var(--shiki-dark) !important;
+    background-color: transparent !important;
+    font-style: var(--shiki-dark-font-style) !important;
+    font-weight: var(--shiki-dark-font-weight) !important;
+  }
+}
+
+/* one orchestrated entrance, everything else stays still */
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.reveal {
+  animation: rise 0.5s cubic-bezier(0.23, 1, 0.32, 1) both;
+  animation-delay: calc(min(var(--d, 0), 8) * 70ms);
+}
+@media (prefers-reduced-motion: reduce) {
+  .reveal {
+    animation: none;
+  }
+}
+
+/* scroll reveal for sections below the fold; stays visible without JS */
+html.js .reveal-io {
+  opacity: 0;
+  transform: translateY(16px);
+  transition:
+    opacity 0.55s cubic-bezier(0.23, 1, 0.32, 1),
+    transform 0.55s cubic-bezier(0.23, 1, 0.32, 1);
+}
+html.js .reveal-io.in {
+  opacity: 1;
+  transform: translateY(0);
+}
+@media (prefers-reduced-motion: reduce) {
+  html.js .reveal-io {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+}

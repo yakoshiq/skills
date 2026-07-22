@@ -1,0 +1,229 @@
+---
+import Base from '../layouts/Base.astro';
+import InstallCommand from '../components/InstallCommand.astro';
+import SkillExample from '../components/SkillExample.astro';
+
+const skills = [
+  {
+    name: 'essential-comments',
+    desc: 'Keeps the facts code cannot recover — why, invariants, external constraints — and deletes narration that only restates it.',
+    note: 'Same function, same behavior. The narration only repeated what the lines already say. The surviving comments carry what a reader cannot reconstruct: who owns force, and why reserve must come before charge.',
+    before: `export function handleCheckout(
+  req: CheckoutReq,
+  opts: { dryRun?: boolean; force?: boolean } = {},
+): boolean {
+  // Validate the request.
+  if (!req.productId || req.qty <= 0) return false;
+
+  // Get the stock.
+  const stock = inventory[req.productId] ?? 0;
+
+  // Check whether oversell is allowed.
+  if (stock < req.qty && !opts.force) return false;
+
+  // Reserve the stock.
+  inventory[req.productId] = stock - req.qty;
+  // Subtract quantity.`,
+    after: `export function handleCheckout(
+  req: CheckoutReq,
+  opts: { dryRun?: boolean; force?: boolean } = {},
+): boolean {
+  if (!req.productId || req.qty <= 0) return false;
+
+  const stock = inventory[req.productId] ?? 0;
+
+  // force is an operations override
+  // for VIP oversell.
+  if (stock < req.qty && !opts.force) return false;
+
+  // Reserve before charge so concurrent
+  // checkouts cannot both pass the stock check.
+  inventory[req.productId] = stock - req.qty;`,
+  },
+  {
+    name: 'jane-street-style',
+    desc: 'Names the domain operation and gives every failure its own type — while the legacy entry point keeps its observable behavior.',
+    note: 'Callers can now tell invalid input from a missing wallet, and NotifyFailedAfterDebit states that the debit committed while notification did not. The legacy process entry point still returns the same values, so nobody migrates.',
+    before: `export function process(
+  d: any,
+  flag = true,
+  mode = 0,
+): any {
+  try {
+    if (mode !== 1) return false;
+    if (
+      typeof d.uid !== "string" ||
+      typeof d.amt !== "number" ||
+      d.amt <= 0 ||
+      !(d.uid in wallets)
+    ) {
+      return false;
+    }
+
+    const bal = wallets[d.uid] - d.amt;
+    wallets[d.uid] = bal;
+    if (flag) notifyProvider(d.uid, -d.amt);
+    return bal;
+  } catch {
+    return false;
+  }
+}`,
+    after: `export function debitWallet(
+  userId: string,
+  amount: number,
+): number {
+  if (amount <= 0) throw new InvalidDebit(amount);
+  if (!(userId in wallets)) {
+    throw new WalletNotFound(userId);
+  }
+
+  const balance = wallets[userId] - amount;
+  wallets[userId] = balance;
+
+  try {
+    notifyProvider(userId, -amount);
+  } catch (cause) {
+    // debit already committed — carry both facts
+    throw new NotifyFailedAfterDebit(
+      userId, balance, cause,
+    );
+  }
+
+  return balance;
+}`,
+  },
+  {
+    name: 'surgical-changes',
+    desc: 'Fixes the root cause and leaves everything else alone — no renames, no result-type redesign, no migration the bug never asked for.',
+    note: 'Both diffs fix the missing retry attempt. The first also replaces the public API and forces every caller and test to migrate. The second touches only the causal line, so the review takes seconds.',
+    lang: 'diff' as const,
+    before: `- export async function deliver(
+-   message: string,
+-   maxAttempts: number,
+-   send: Sender,
+- ): Promise<boolean> {
++ export async function deliverWithRetry(
++   message: string,
++   policy: RetryPolicy,
++   sender: Sender,
++ ): Promise<DeliveryResult> {`,
+    after: `- while (attempt < maxAttempts - 1) {
++ while (attempt < maxAttempts) {`,
+  },
+  {
+    name: 'tests-that-matter',
+    desc: 'Proves observable state and the real external boundary. A call-count test stays green while the wrong amount moves.',
+    note: 'The first test stays green when the wrong amount moves, one balance is lost, or the result lies. The second fails in all three cases: it asserts observable state, and mocks only the provider the repo does not own.',
+    before: `it("calls its dependencies", async () => {
+  const wallets = { get: vi.fn(), save: vi.fn() };
+  const notify = vi.fn();
+  wallets.get.mockResolvedValue({
+    id: "w1", balance: 100,
+  });
+
+  await processTransfer(
+    { from: "w1", to: "w2", amount: 40 },
+    { wallets, notify },
+  );
+
+  expect(wallets.get).toHaveBeenCalledWith("w1");
+  expect(wallets.save).toHaveBeenCalled();
+  expect(notify).toHaveBeenCalled();
+});`,
+    after: `it("moves balances and notifies", async () => {
+  const wallets = memoryWallets({
+    w1: 100, w2: 10,
+  });
+  const notify = vi.fn()
+    .mockResolvedValue(undefined);
+
+  const result = await processTransfer(
+    { from: "w1", to: "w2", amount: 40 },
+    { wallets, notify },
+  );
+
+  expect(result).toEqual({ ok: true });
+  expect(wallets.snapshot()).toEqual({
+    w1: 60, w2: 50,
+  });
+  expect(notify).toHaveBeenCalledWith({
+    from: "w1", to: "w2", amount: 40,
+  });
+});`,
+  },
+];
+---
+
+<Base
+  title="Skills for intentional code"
+  description="Agent skills that push toward code humans can review: clear domain meaning, honest failures, comments that earn their place, and tests that prove real behavior."
+>
+  <header class="reveal text-[13px]" style="--d:0">
+    <a
+      href="https://github.com/yakoshiq/skills"
+      class="font-medium text-ink no-underline hover:text-rose dark:text-snow dark:hover:text-bloom"
+    >
+      yakoshiq / skills
+    </a>
+  </header>
+
+  <section class="mt-20">
+    <h1 class="reveal text-[26px] font-bold leading-snug tracking-tight" style="--d:1">
+      Skills for intentional code
+    </h1>
+    <p class="reveal mt-5 max-w-[64ch] text-[14px] leading-[1.65]" style="--d:2">
+      Agent skills that push toward code humans can review. Default agent output looks
+      finished and still hides the hard parts: vague names, one <code>false</code> for
+      every failure, narration comments, green tests without confidence.
+    </p>
+    <p class="reveal mt-4 max-w-[64ch] text-[14px] leading-[1.65] text-faint dark:text-dim" style="--d:3">
+      Each skill is short on purpose — exercised until the result is near-ideal and the
+      file stays small.
+    </p>
+    <div class="reveal mt-7 flex max-w-[560px] gap-2" style="--d:4">
+      <div class="min-w-0 flex-1">
+        <InstallCommand />
+      </div>
+      <a
+        href="https://github.com/yakoshiq/skills"
+        class="flex h-11 shrink-0 items-center rounded-lg border border-line px-4 text-[13px] text-ink no-underline transition-colors duration-150 hover:bg-card hover:text-rose dark:border-seam dark:text-snow dark:hover:bg-night-card dark:hover:text-bloom"
+      >
+        GitHub
+      </a>
+    </div>
+  </section>
+
+  <h2 class="reveal mt-24 text-[13px] font-medium text-faint dark:text-dim" style="--d:5">
+    The skills
+  </h2>
+
+  {skills.map((s) => <SkillExample {...s} />)}
+
+  <footer class="reveal-io mt-24 flex items-baseline justify-between border-t border-line pt-6 text-[12.5px] text-faint dark:border-seam dark:text-dim">
+    <span>MIT</span>
+    <a href="https://github.com/yakoshiq/skills" class="hover:text-rose dark:hover:text-bloom">github.com/yakoshiq/skills</a>
+  </footer>
+
+  <script is:inline>
+  {
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const els = document.querySelectorAll('.reveal-io');
+    if (reduce || !('IntersectionObserver' in window)) {
+      els.forEach((el) => el.classList.add('in'));
+    } else {
+      const io = new IntersectionObserver(
+        (entries) => {
+          for (const entry of entries) {
+            if (entry.isIntersecting) {
+              entry.target.classList.add('in');
+              io.unobserve(entry.target);
+            }
+          }
+        },
+        { threshold: 0.1, rootMargin: '0px 0px -32px 0px' },
+      );
+      els.forEach((el) => io.observe(el));
+    }
+  }
+  </script>
+</Base>

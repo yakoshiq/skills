@@ -1,0 +1,91 @@
+---
+const command = 'npx skills add yakoshiq/skills';
+---
+
+<div
+  class="flex h-11 items-center gap-3 rounded-lg border border-line bg-card pl-3.5 pr-1.5 dark:border-seam dark:bg-night-card"
+>
+  <span class="select-none text-rose dark:text-bloom" aria-hidden="true">$</span>
+  <code class="truncate text-[13px]">{command}</code>
+  <button
+    type="button"
+    data-copy={command}
+    aria-label="Copy install command"
+    class="copy-btn relative ml-auto grid h-8 w-8 shrink-0 cursor-pointer place-items-center rounded-md text-faint transition-[background-color,color,transform] duration-150 ease-out hover:bg-line/60 hover:text-ink active:scale-[0.93] dark:text-dim dark:hover:bg-seam/70 dark:hover:text-snow"
+  >
+    <span class="icon icon-copy absolute inset-0 grid place-items-center" aria-hidden="true">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="9" y="9" width="12" height="12" rx="2.5"></rect>
+        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+      </svg>
+    </span>
+    <span class="icon icon-check absolute inset-0 grid place-items-center text-good dark:text-dgood" aria-hidden="true">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M4 12.5l5 5L20 6.5"></path>
+      </svg>
+    </span>
+  </button>
+</div>
+
+<style>
+  /* crossfade masked with blur: outgoing shrinks away, incoming grows in */
+  .copy-btn .icon {
+    transition:
+      opacity 180ms cubic-bezier(0.23, 1, 0.32, 1),
+      transform 180ms cubic-bezier(0.23, 1, 0.32, 1),
+      filter 180ms cubic-bezier(0.23, 1, 0.32, 1);
+  }
+  .copy-btn .icon-copy {
+    opacity: 1;
+    transform: scale(1);
+    filter: blur(0);
+  }
+  .copy-btn .icon-check {
+    opacity: 0;
+    transform: scale(0.85);
+    filter: blur(2px);
+  }
+  .copy-btn[data-copied] .icon-copy {
+    opacity: 0;
+    transform: scale(0.8);
+    filter: blur(2px);
+  }
+  .copy-btn[data-copied] .icon-check {
+    opacity: 1;
+    transform: scale(1);
+    filter: blur(0);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .copy-btn .icon {
+      transition: opacity 150ms ease;
+      transform: none;
+      filter: none;
+    }
+    .copy-btn {
+      transition: background-color 150ms ease, color 150ms ease;
+    }
+    .copy-btn:active {
+      transform: none;
+    }
+  }
+</style>
+
+<script is:inline>
+  document.querySelectorAll('[data-copy]').forEach((btn) => {
+    let timer;
+    btn.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(btn.dataset.copy);
+      } catch {
+        return;
+      }
+      btn.setAttribute('data-copied', '');
+      btn.setAttribute('aria-label', 'Copied');
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        btn.removeAttribute('data-copied');
+        btn.setAttribute('aria-label', 'Copy install command');
+      }, 1400);
+    });
+  });
+</script>
