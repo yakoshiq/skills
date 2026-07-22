@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
+  "name": "yakoshiq-skills",
+  "description": "Agent skills for intentional, reviewable code.",
+  "owner": {
+    "name": "yakoshiq"
+  },
+  "plugins": [
+    {
+      "name": "intentional-code",
+      "description": "Write intentional, reviewable code with clear behavior and controlled complexity.",
+      "source": "./",
+      "skills": [
+        "./skills/essential-comments",
+        "./skills/jane-street-style",
+        "./skills/surgical-changes",
+        "./skills/tests-that-matter"
+      ]
+    }
+  ]
+}

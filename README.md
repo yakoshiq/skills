@@ -18,6 +18,8 @@ deepseek-v4-flash, mimo-v2.5, glm-5.1, qwen3.7-plus, minimax-m2.7, kimi-k2.7-cod
 npx skills add yakoshiq/skills
 ```
 
+In the interactive picker, select the **Intentional Code** group to install the full set at once.
+
 One skill:
 
 ```bash
