@@ -1,0 +1,69 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640" xml:space="preserve">
+  <defs>
+    <radialGradient id="glow" cx="50%" cy="-20%" r="90%">
+      <stop offset="0%" stop-color="#7e2f43" stop-opacity="0.55"/>
+      <stop offset="45%" stop-color="#3a1520" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#0b0709" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="fade" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#120b0e"/>
+      <stop offset="100%" stop-color="#0b0709"/>
+    </linearGradient>
+    <style>
+      .mono { font-family: 'JetBrainsMono Nerd Font Mono', 'JetBrains Mono', 'DejaVu Sans Mono', monospace; }
+      .kw   { fill: #e2637f; }
+      .typ  { fill: #9db8d2; }
+    </style>
+  </defs>
+
+  <!-- background -->
+  <rect width="1280" height="640" rx="26" fill="url(#fade)"/>
+  <rect width="1280" height="640" rx="26" fill="url(#glow)"/>
+  <rect x="1" y="1" width="1278" height="638" rx="25" fill="none" stroke="#c76b82" stroke-opacity="0.55" stroke-width="2"/>
+
+  <!-- header -->
+  <text x="64" y="54" class="mono" font-size="18" fill="#8d6b75">yakoshiq / skills</text>
+  <text x="64" y="102" class="mono" font-size="38" font-weight="bold" fill="#f4eaee">Skills for intentional code</text>
+  <text x="64" y="134" class="mono" font-size="19" fill="#b597a1">default output looks finished &#8212; these skills make it reviewable</text>
+
+  <!-- ===== pair 1: explicit failures ===== -->
+  <text x="64" y="176" class="mono" font-size="15" fill="#a06b78">explicit failures</text>
+  <rect x="64" y="185" width="1152" height="28" rx="8" fill="#d65a5a" opacity="0.06"/>
+  <rect x="64" y="217" width="1152" height="28" rx="8" fill="#e2637f" opacity="0.07"/>
+  <text x="88" y="204" class="mono" font-size="16" font-weight="bold" fill="#d66a6a">&#10007;</text>
+  <text x="88" y="236" class="mono" font-size="16" font-weight="bold" fill="#e2637f">&#10003;</text>
+  <text x="128" y="204" class="mono" font-size="16" fill="#a8939c"><tspan class="kw">function</tspan> process(u: <tspan class="typ">string</tspan>, amt: <tspan class="typ">number</tspan>): <tspan class="typ">Promise&lt;boolean&gt;</tspan></text>
+  <text x="128" y="236" class="mono" font-size="16" fill="#dfc9d1"><tspan class="kw">function</tspan> charge(wallet: <tspan class="typ">Wallet</tspan>, amount: <tspan class="typ">Cents</tspan>): <tspan class="typ">Promise&lt;Result&lt;Receipt, DeclineReason&gt;&gt;</tspan></text>
+
+  <!-- ===== pair 2: honest comments ===== -->
+  <text x="64" y="280" class="mono" font-size="15" fill="#a06b78">honest comments</text>
+  <rect x="64" y="289" width="1152" height="28" rx="8" fill="#d65a5a" opacity="0.06"/>
+  <rect x="64" y="321" width="1152" height="28" rx="8" fill="#e2637f" opacity="0.07"/>
+  <text x="88" y="308" class="mono" font-size="16" font-weight="bold" fill="#d66a6a">&#10007;</text>
+  <text x="88" y="340" class="mono" font-size="16" font-weight="bold" fill="#e2637f">&#10003;</text>
+  <text x="128" y="308" class="mono" font-size="16" fill="#75806b">// processes the payment</text>
+  <text x="128" y="340" class="mono" font-size="16" fill="#8fa383">// PSP declines charges over 10_000 cents</text>
+
+  <!-- ===== pair 3: real tests ===== -->
+  <text x="64" y="384" class="mono" font-size="15" fill="#a06b78">real tests</text>
+  <rect x="64" y="393" width="1152" height="28" rx="8" fill="#d65a5a" opacity="0.06"/>
+  <rect x="64" y="425" width="1152" height="28" rx="8" fill="#e2637f" opacity="0.07"/>
+  <text x="88" y="412" class="mono" font-size="16" font-weight="bold" fill="#d66a6a">&#10007;</text>
+  <text x="88" y="444" class="mono" font-size="16" font-weight="bold" fill="#e2637f">&#10003;</text>
+  <text x="128" y="412" class="mono" font-size="16" fill="#a8939c">expect(wallet.debit).toHaveBeenCalled()</text>
+  <text x="128" y="444" class="mono" font-size="16" fill="#dfc9d1">expect(wallet.balance).toBe(9_500)</text>
+
+  <!-- ===== pair 4: minimal diffs ===== -->
+  <text x="64" y="488" class="mono" font-size="15" fill="#a06b78">minimal diffs</text>
+  <rect x="64" y="497" width="1152" height="28" rx="8" fill="#d65a5a" opacity="0.06"/>
+  <rect x="64" y="529" width="1152" height="28" rx="8" fill="#e2637f" opacity="0.07"/>
+  <text x="88" y="516" class="mono" font-size="16" font-weight="bold" fill="#d66a6a">&#10007;</text>
+  <text x="88" y="548" class="mono" font-size="16" font-weight="bold" fill="#e2637f">&#10003;</text>
+  <text x="128" y="516" class="mono" font-size="16" fill="#a8939c">fix: off-by-one + drive-by refactor of 11 unrelated files</text>
+  <text x="128" y="548" class="mono" font-size="16" fill="#dfc9d1">fix: off-by-one, nothing else</text>
+
+  <!-- footer terminal -->
+  <line x1="0" y1="572" x2="1280" y2="572" stroke="#3d222b" stroke-width="1.5"/>
+  <text x="64" y="613" class="mono" font-size="22" fill="#e2637f">$</text>
+  <text x="98" y="613" class="mono" font-size="22" fill="#cbb5bd">npx skills add yakoshiq/skills</text>
+</svg>
