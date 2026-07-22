@@ -5,13 +5,13 @@ Two jobs, same skill:
 1. **Review / fix** - strip mock theater and weak asserts; prove outcomes, failures, state.
 2. **Greenfield** - from known invariants and failure modes, add the few cases that would catch real bugs.
 
-No coverage target. No TDD ritual. Snippets show test shape, not a full suite.
+No arbitrary coverage target. Meet repository gates, but optimize for confidence rather than percentage. No TDD ritual. Snippets show test shape, not a full suite.
 
 ---
 
 ## 1. Mock theater -> observable outcomes
 
-Service debits a wallet, then notifies. Notify can fail after debit commits (partial success).
+Service moves balances, then notifies. Notify can fail after the transfer commits (partial success). API shape is a result object throughout.
 
 **Without** (looks thorough, proves little)
 
@@ -27,10 +27,10 @@ it("processTransfer calls deps in order", async () => {
 });
 ```
 
-**With** (outcome + partial success)
+**With** (outcome + boundary effect + partial success)
 
 ```ts
-it("debits source and credits destination on success", async () => {
+it("moves balances and notifies on success", async () => {
   const db = memoryWallets({ w1: 100, w2: 10 });
   const notify = vi.fn().mockResolvedValue(undefined);
   const result = await processTransfer(
@@ -39,32 +39,37 @@ it("debits source and credits destination on success", async () => {
   );
   expect(result).toEqual({ ok: true });
   expect(db.snapshot()).toEqual({ w1: 60, w2: 50 });
+  expect(notify).toHaveBeenCalledWith({ from: "w1", to: "w2", amount: 40 });
 });
 
-it("keeps debit when notify fails after commit", async () => {
+it("keeps committed balances when notify fails after commit", async () => {
   const db = memoryWallets({ w1: 100, w2: 10 });
   const notify = vi.fn().mockRejectedValue(new Error("smtp down"));
   const result = await processTransfer(
     { from: "w1", to: "w2", amount: 40 },
     { wallets: db, notify },
   );
-  expect(result).toEqual({ ok: false, error: "notify_failed", debited: true });
+  expect(result).toEqual({ ok: false, error: "notify_failed", committed: true });
   expect(db.snapshot()).toEqual({ w1: 60, w2: 50 });
 });
 ```
+
+`notify` is mocked because it is the external edge. `memoryWallets` is a fake for owned state - not mock theater. Call asserts sit beside outcome checks; they do not replace them.
 
 ---
 
 ## 2. Collapsed failures -> distinct modes
 
+Same result-object API on both sides. The upgrade is sharper asserts, not a new failure style.
+
 **Without**
 
 ```ts
 it("rejects bad transfers", async () => {
-  await expect(processTransfer({ from: "w1", to: "w2", amount: -1 }, deps))
-    .rejects.toThrow();
-  await expect(processTransfer({ from: "missing", to: "w2", amount: 1 }, deps))
-    .rejects.toThrow();
+  const a = await processTransfer({ from: "w1", to: "w2", amount: -1 }, deps);
+  expect(a.ok).toBe(false);
+  const b = await processTransfer({ from: "missing", to: "w2", amount: 1 }, deps);
+  expect(b.ok).toBe(false);
 });
 ```
 

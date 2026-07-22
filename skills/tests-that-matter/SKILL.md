@@ -25,14 +25,16 @@ Match the repo's test runner and style. Do not invent a framework, coverage cult
 ## Avoid
 
 - Private helpers, call order inside the unit, and literal structure of the implementation.
-- Mocks inside the unit under test. Mock only the real external edge (network, clock, disk, queue, payment gateway).
+- Mocks of implementation details inside the unit. Prefer in-memory fakes for owned stateful collaborators; mock only narrow external or nondeterministic edges (network, clock, disk, queue, payment gateway).
 - Asserts that only restate the mock setup (`toHaveBeenCalledWith` with no outcome check).
 - Five near-duplicate cases when one table or parameterized rule states the policy.
 - Broad snapshots or full-object equality when a few precise fields carry the meaning.
+- Flakes: real sleeps, uncontrolled clocks/randomness, test-order dependence, shared mutable fixtures across cases.
 
 ## Discipline
 
 - Prefer fewer sharper tests over a pile of weak ones.
 - Name tests by the behavior or risk they guard, not by the method under test alone.
 - If a test can stay green while the bug returns, delete or rewrite it.
+- Meet repo coverage gates when they exist; optimize for confidence, not percentage.
 - Ship tests plus a brief note of what confidence they add - no essay.
