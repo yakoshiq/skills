@@ -1,6 +1,6 @@
 ---
 name: jane-street-style
-description: Write, refactor, or review code for semantic clarity using precise domain names, explicit failures and effects, immutable data flow, useful domain types, and minimal accidental complexity. Use for Jane Street or house style, intentional code, vague naming, hidden failures, primitive obsession, mutation-heavy code, or unnecessary abstraction.
+description: Design, refactor, or review code when semantic clarity is the explicit goal, using precise domain names, explicit failures and effects, useful domain types, immutable data flow, and minimal accidental complexity. Use for Jane Street or clarity-first redesign, vague domain APIs, collapsed failures, primitive obsession, or mutation-heavy code - not ordinary bug fixes that should preserve local shape.
 ---
 
 # Clarity-First Code
