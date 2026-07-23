@@ -10,7 +10,7 @@ Agent skills that push toward code humans can review: clear domain meaning, hone
 
 Default agent output often looks finished and still hides the hard parts - vague names, one `false` for every failure, narration comments, missing whys, green tests without confidence. These skills are short on purpose. Each one is exercised on several models until the result is near-ideal and the skill file stays small:
 
-deepseek-v4-flash, mimo-v2.5, glm-5.1, qwen3.7-plus, minimax-m2.7, kimi-k2.7-code, gpt-5.6.
+<img src="assets/models-banner.svg" alt="Exercised across seven models: DeepSeek v4-flash, MiMo v2.5, GLM 5.1, Qwen 3.7-plus, MiniMax M2.7, Kimi K2.7-code, GPT 5.6" width="840" />
 
 ## Install
 
