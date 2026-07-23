@@ -5,6 +5,10 @@ import SkillExample from '../components/SkillExample.astro';
 
 const skillSummaries = [
   {
+    name: 'concurrency-invariants',
+    desc: 'Names the guarantees behind atomicity, ordering, retries, ownership, and partial success.',
+  },
+  {
     name: 'essential-comments',
     desc: 'Keeps only comments that explain why, invariants, or external constraints.',
   },
@@ -23,6 +27,68 @@ const skillSummaries = [
 ];
 
 const skills = [
+  {
+    name: 'concurrency-invariants',
+    desc: 'Names the guarantee before choosing a mutex, retry, transaction, lease, or idempotency key — then enforces it across every owner and commit boundary.',
+    note: 'The local set coordinates only one process, every retry can charge again, and a crash can split state from publication. The correction uses one provider identity, a shared claim whose fence rejects stale owners, and one local commit that stores charged state with a durable pending event.',
+    before: `const activeOrders = new Set<string>();
+
+export async function processOrder(
+  orderId: string, deps: Deps,
+) {
+  if (activeOrders.has(orderId)) return;
+  activeOrders.add(orderId);
+
+  try {
+    const charge = await retry(3, (attempt) =>
+      deps.payments.charge({
+        orderId,
+        idempotencyKey:
+          \`\${orderId}:\${Date.now()}:\${attempt}\`,
+      }),
+    );
+
+    await deps.orders.markCharged(
+      orderId, charge.id,
+    );
+    await deps.events.publish({
+      type: "order_charged", orderId,
+    });
+  } finally {
+    activeOrders.delete(orderId);
+  }
+}`,
+    after: `export async function processOrder(
+  orderId: string, deps: Deps,
+) {
+  const claimed = await deps.orders.claim(
+    orderId, deps.workerId,
+  );
+  if (claimed.kind !== "acquired") return;
+
+  const charge = await deps.payments.charge({
+    orderId,
+    idempotencyKey: \`charge:\${orderId}\`,
+  });
+
+  const result = await deps.orders
+    .commitChargedAndEnqueue({
+      orderId,
+      fence: claimed.claim.fence,
+      chargeId: charge.id,
+      event: {
+        id: \`order-charged:\${orderId}\`,
+        type: "order_charged",
+        status: "pending",
+      },
+    });
+
+  if (result === "stale_owner") {
+    return { kind: "partial" };
+  }
+  return { kind: "committed" };
+}`,
+  },
   {
     name: 'essential-comments',
     desc: 'Keeps the facts code cannot recover — why, invariants, external constraints — and deletes narration that only restates it.',
@@ -175,7 +241,7 @@ const skills = [
 
 <Base
   title="Skills for intentional code"
-  description="Agent skills that push toward code humans can review: clear domain meaning, honest failures, comments that earn their place, and tests that prove real behavior."
+  description="Agent skills that push toward code humans can review: clear domain meaning, honest failures, explicit concurrency guarantees, comments that earn their place, and tests that prove real behavior."
 >
   <header class="reveal text-[13px]" style="--d:0">
     <a
@@ -191,13 +257,14 @@ const skills = [
       Skills for intentional code
     </h1>
     <p class="reveal mt-5 max-w-[64ch] text-[14px] leading-[1.65]" style="--d:2">
-      Agent skills that push toward code humans can review. Default agent output looks
-      finished and still hides the hard parts: vague names, one <code>false</code> for
-      every failure, narration comments, green tests without confidence.
+      Agent skills that push toward code humans can review, with explicit concurrency
+      guarantees. Default agent output looks finished and still hides the hard parts:
+      vague names, one <code>false</code> for every failure, a mutex, retry, or transaction
+      with no named invariant, narration comments, and green tests without confidence.
     </p>
     <p class="reveal mt-4 max-w-[64ch] text-[14px] leading-[1.65] text-faint dark:text-dim" style="--d:3">
-      Each skill is short on purpose — exercised until the result is near-ideal and the
-      file stays small.
+      These skills are short on purpose. Each one is exercised on several models, and
+      the skill file stays limited to guidance that transfers across tasks.
     </p>
     <div class="max-w-[680px]">
       <section class="reveal mt-8" style="--d:4" aria-labelledby="included-heading">
