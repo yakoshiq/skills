@@ -3,6 +3,25 @@ import Base from '../layouts/Base.astro';
 import InstallCommand from '../components/InstallCommand.astro';
 import SkillExample from '../components/SkillExample.astro';
 
+const skillSummaries = [
+  {
+    name: 'essential-comments',
+    desc: 'Keeps only comments that explain why, invariants, or external constraints.',
+  },
+  {
+    name: 'jane-street-style',
+    desc: 'Makes domain meaning, effects, and failure cases explicit.',
+  },
+  {
+    name: 'surgical-changes',
+    desc: 'Solves the root cause with the smallest coherent change.',
+  },
+  {
+    name: 'tests-that-matter',
+    desc: 'Proves observable behavior, boundaries, and real regressions.',
+  },
+];
+
 const skills = [
   {
     name: 'essential-comments',
@@ -180,21 +199,46 @@ const skills = [
       Each skill is short on purpose — exercised until the result is near-ideal and the
       file stays small.
     </p>
-    <div class="reveal mt-7 flex max-w-[560px] gap-2" style="--d:4">
-      <div class="min-w-0 flex-1">
-        <InstallCommand />
+    <div class="max-w-[680px]">
+      <section class="reveal mt-8" style="--d:4" aria-labelledby="included-heading">
+        <h2 id="included-heading" class="text-[12.5px] font-medium text-faint dark:text-dim">
+          Included
+        </h2>
+        <dl class="mt-3 divide-y divide-line border-y border-line dark:divide-seam dark:border-seam">
+          {skillSummaries.map((skill) => (
+            <div class="grid gap-1 py-2.5 sm:grid-cols-[180px_1fr] sm:items-baseline sm:gap-5">
+              <dt>
+                <a
+                  href={`#${skill.name}`}
+                  class="text-[12.5px] font-medium text-ink no-underline hover:text-rose dark:text-snow dark:hover:text-bloom"
+                >
+                  {skill.name}
+                </a>
+              </dt>
+              <dd class="text-[12px] leading-relaxed text-faint dark:text-dim">{skill.desc}</dd>
+            </div>
+          ))}
+        </dl>
+      </section>
+      <div class="reveal mt-8 flex flex-col gap-2 sm:flex-row" style="--d:5">
+        <div class="min-w-0 flex-1">
+          <InstallCommand />
+        </div>
+        <a
+          href="https://github.com/yakoshiq/skills"
+          class="flex h-11 w-full shrink-0 items-center justify-center rounded-lg border border-line px-4 text-[13px] text-ink no-underline transition-colors duration-150 hover:bg-card hover:text-rose sm:w-auto dark:border-seam dark:text-snow dark:hover:bg-night-card dark:hover:text-bloom"
+        >
+          GitHub
+        </a>
       </div>
-      <a
-        href="https://github.com/yakoshiq/skills"
-        class="flex h-11 shrink-0 items-center rounded-lg border border-line px-4 text-[13px] text-ink no-underline transition-colors duration-150 hover:bg-card hover:text-rose dark:border-seam dark:text-snow dark:hover:bg-night-card dark:hover:text-bloom"
-      >
-        GitHub
-      </a>
+      <p class="reveal mt-3 text-[12px] leading-relaxed text-faint dark:text-dim" style="--d:6">
+        Works with Pi, Claude Code, Cursor, Codex, and other agents that support skills.
+      </p>
     </div>
   </section>
 
-  <h2 class="reveal mt-24 text-[13px] font-medium text-faint dark:text-dim" style="--d:5">
-    The skills
+  <h2 class="reveal mt-24 text-[13px] font-medium text-faint dark:text-dim" style="--d:7">
+    Before / after
   </h2>
 
   {skills.map((s) => <SkillExample {...s} />)}
