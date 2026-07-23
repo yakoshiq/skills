@@ -1,4 +1,4 @@
-<a href="https://github.com/yakoshiq/skills">
+<a href="https://skills.yakoshi.dev">
   <img src="assets/banner.png" alt="Skills for intentional code" width="840" />
 </a>
 
