@@ -6,9 +6,9 @@
 
 [![skills.sh](https://skills.sh/b/yakoshiq/skills)](https://skills.sh/yakoshiq/skills)
 
-Agent skills that push toward code humans can review: clear domain meaning, honest failures, comments only when they earn their place, and tests that prove real behavior.
+Agent skills that push toward code humans can review: clear domain meaning, honest failures, explicit concurrency guarantees, comments only when they earn their place, and tests that prove real behavior.
 
-Default agent output often looks finished and still hides the hard parts - vague names, one `false` for every failure, narration comments, missing whys, green tests without confidence. These skills are short on purpose. Each one is exercised on several models until the result is near-ideal and the skill file stays small:
+Default agent output often looks finished and still hides the hard parts - vague names, one `false` for every failure, mutexes with no stated invariant, narration comments, missing whys, and green tests without confidence. These skills are short on purpose. Each one is exercised on several models, and the skill file stays limited to guidance that transfers across tasks:
 
 <img src="assets/models-banner.svg" alt="Exercised across seven models: DeepSeek v4-flash, MiMo v2.5, GLM 5.1, Qwen 3.7-plus, MiniMax M2.7, Kimi K2.7-code, GPT 5.6" width="840" />
 
@@ -28,6 +28,7 @@ Before / after pages are human-facing docs outside the skill folders, so install
 
 ## Reference
 
+- **[concurrency-invariants](./skills/concurrency-invariants/SKILL.md)** - Design, fix, or review concurrent and asynchronous code so atomicity, ordering, retries, idempotency, cancellation, timeouts, ownership, and partial success are explicit. [Before / after](./docs/examples/concurrency-invariants.md).
 - **[essential-comments](./skills/essential-comments/SKILL.md)** - Add, keep, or remove comments so only human-useful remarks remain: why, invariants, tradeoffs, external constraints - not narration or restated code. Works as cleanup and when writing new code. [Before / after](./docs/examples/essential-comments.md).
 - **[jane-street-style](./skills/jane-street-style/SKILL.md)** - Design, refactor, or review when semantic clarity is the explicit goal: precise domain names, explicit failures and effects, useful domain types, and minimal accidental complexity. [Before / after](./docs/examples/jane-street-style.md).
 - **[surgical-changes](./skills/surgical-changes/SKILL.md)** - Implement fixes and small features as the smallest coherent change that solves the request while preserving unrelated behavior and keeping cleanup out of the diff. [Before / after](./docs/examples/surgical-changes.md).

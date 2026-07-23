@@ -9,7 +9,7 @@
   "plugins": [
     {
       "name": "intentional-code",
-      "description": "Write intentional, reviewable code with clear behavior and controlled complexity.",
+      "description": "Write intentional, reviewable code with clear behavior, controlled complexity, and explicit concurrency guarantees.",
       "author": {
         "name": "yakoshiq",
         "url": "https://github.com/yakoshiq"
@@ -23,17 +23,21 @@
         "software-design",
         "refactoring",
         "testing",
-        "documentation"
+        "documentation",
+        "concurrency",
+        "asynchronous-programming"
       ],
       "category": "development",
       "tags": [
         "agent-skills",
         "reviewability",
-        "maintainability"
+        "maintainability",
+        "reliability"
       ],
       "strict": false,
       "source": "./",
       "skills": [
+        "./skills/concurrency-invariants",
         "./skills/essential-comments",
         "./skills/jane-street-style",
         "./skills/surgical-changes",
