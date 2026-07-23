@@ -14,27 +14,17 @@ Default agent output often looks finished and still hides the hard parts - vague
 
 ## Install
 
+Works with Pi, Claude Code, Cursor, Codex, and other agents that support skills.
+
 ```bash
 npx skills add yakoshiq/skills
 ```
 
-In the interactive picker, select the **Intentional Code** group to install the full set at once.
-
-One skill:
-
-```bash
-npx skills add yakoshiq/skills --skill essential-comments
-```
-
-Global:
-
-```bash
-npx skills add yakoshiq/skills -g
-```
+In the picker, choose **Intentional Code** for the full set. One skill: add `--skill essential-comments`. Global install: add `-g`.
 
 Prefer an explicit invoke (`/skill:essential-comments` or "use essential-comments"). Auto-trigger from the description alone depends on the model.
 
-Before / after pages are human-facing documentation. They live outside the skill folders so installed skills stay limited to model-facing instructions.
+Before / after pages are human-facing docs outside the skill folders, so installed skills stay limited to model-facing instructions.
 
 ## Reference
 
