@@ -7,7 +7,7 @@ interface Props {
   note: string;
   before: string;
   after: string;
-  lang?: 'ts' | 'diff';
+  lang?: 'ts' | 'diff' | 'text';
 }
 
 const { name, desc, note, before, after, lang = 'ts' } = Astro.props;

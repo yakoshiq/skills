@@ -9,6 +9,10 @@ const skillSummaries = [
     desc: 'Names the guarantees behind atomicity, ordering, retries, ownership, and partial success.',
   },
   {
+    name: 'correct',
+    desc: 'Prevents a demonstrated recurring mistake with structural enforcement. Explicit use only.',
+  },
+  {
     name: 'essential-comments',
     desc: 'Keeps only comments that explain why, invariants, or external constraints.',
   },
@@ -24,13 +28,17 @@ const skillSummaries = [
     name: 'tests-that-matter',
     desc: 'Proves observable behavior, boundaries, and real regressions.',
   },
+  {
+    name: 'verification-planning',
+    desc: 'Plans acceptance across runtime boundaries and closes evidence gaps — not every small fix.',
+  },
 ];
 
 const skills = [
   {
     name: 'concurrency-invariants',
-    desc: 'Names the guarantee before choosing a mutex, retry, transaction, lease, or idempotency key — then enforces it across every owner and commit boundary.',
-    note: 'The local set coordinates only one process, every retry can charge again, and a crash can split state from publication. The correction uses one provider identity, a shared claim whose fence rejects stale owners, and one local commit that stores charged state with a durable pending event.',
+    desc: 'Designs, fixes, or reviews concurrent and asynchronous code by naming the guarantee before choosing coordination. Separately owned state can remove unnecessary shared writes; a canonical atomic invariant still needs coordination.',
+    note: 'The corrected excerpt assumes a durable queue that redelivers partial results, a fenced store, provider deduplication and lookup, and an atomic state/outbox commit. Timeout remains unknown, not a confirmed non-charge. The full example names these adapter guarantees, cancellation handling, and recovery paths.',
     before: `const activeOrders = new Set<string>();
 
 export async function processOrder(
@@ -62,37 +70,105 @@ export async function processOrder(
   orderId: string, deps: Deps,
 ) {
   const claimed = await deps.orders.claim(
-    orderId, deps.workerId,
+    orderId, deps.workerId, 30_000,
   );
-  if (claimed.kind !== "acquired") return;
+  if (claimed.kind !== "acquired") {
+    return { kind: "skipped",
+      reason: claimed.kind };
+  }
+  if (deps.signal.aborted) {
+    await deps.orders.release(claimed.claim);
+    throw deps.signal.reason;
+  }
 
-  const charge = await deps.payments.charge({
-    orderId,
-    idempotencyKey: \`charge:\${orderId}\`,
-  });
+  const key = \`charge:\${orderId}\`;
+  let outcome = await deps.payments.charge(
+    orderId, key, deps.signal,
+  );
+  if (outcome.kind === "unknown") {
+    const existing = await deps.payments
+      .findByIdempotencyKey(key, deps.signal);
+    if (!existing) {
+      return {
+        kind: "partial", charge: "unknown",
+        order: "unknown",
+        recovery: "retry_delivery",
+      };
+    }
+    outcome = {
+      kind: "charged",
+      chargeId: existing.chargeId,
+    };
+  }
+  if (outcome.kind === "declined") {
+    await deps.orders.release(claimed.claim);
+    return { kind: "failed",
+      reason: "payment_declined" };
+  }
 
   const result = await deps.orders
-    .commitChargedAndEnqueue({
-      orderId,
-      fence: claimed.claim.fence,
-      chargeId: charge.id,
-      event: {
+    .commitChargedAndEnqueue(
+      claimed.claim, outcome.chargeId, {
         id: \`order-charged:\${orderId}\`,
-        type: "order_charged",
-        status: "pending",
+        type: "order_charged", orderId,
       },
-    });
+    );
 
   if (result === "stale_owner") {
-    return { kind: "partial" };
+    return {
+      kind: "partial", charge: "confirmed",
+      order: "unknown",
+      recovery: "retry_delivery",
+    };
   }
-  return { kind: "committed" };
+  return { kind: "committed",
+    chargeId: outcome.chargeId,
+    event: "pending" };
+}`,
+  },
+  {
+    name: 'correct',
+    desc: 'On explicit request, prevents a demonstrated recurring class of mistakes with the narrowest effective structural constraint, type, mechanical check, or regression. Not an automatic redesign after feedback.',
+    note: 'CSV and JSON were advertised but omitted from a second catalog. One authoritative definition removes that opportunity. This excerpt illustrates the catalog boundary, not a complete exporter: existing implementations and errors remain unchanged. Replay the omissions, a nearby implemented format, and unknown-format rejection at the real consumer boundary; these are illustrative checks, not executed results.',
+    before: `const menuFormats = [
+  "pdf", "csv", "json",
+];
+const exportFormats = ["pdf", "csv"];`,
+    after: `const formats = {
+  pdf: { label: "PDF",
+    contentType: "application/pdf" },
+  csv: { label: "CSV",
+    contentType: "text/csv" },
+  json: { label: "JSON",
+    contentType: "application/json" },
+} as const;
+
+type Format = keyof typeof formats;
+
+export function downloadMenu() {
+  return Object.entries(formats).map(
+    ([format, spec]) => ({
+      label: spec.label,
+      href: \`/exports/\${format}\`,
+    }),
+  );
+}
+
+export function exportContentType(
+  format: string,
+): string {
+  if (!Object.hasOwn(formats, format)) {
+    throw new Error(
+      \`Unsupported export format: \${format}\`,
+    );
+  }
+  return formats[format as Format].contentType;
 }`,
   },
   {
     name: 'essential-comments',
     desc: 'Keeps the facts code cannot recover — why, invariants, external constraints — and deletes narration that only restates it.',
-    note: 'Same function, same behavior. The narration only repeated what the lines already say. The surviving comments carry what a reader cannot reconstruct: who owns force, and why reserve must come before charge.',
+    note: 'Same function, same behavior. Known task context supplies VIP-operations policy, the accepted brief over-hold, and the Stripe read-model race. Keep those facts and remove narration; do not invent missing context or rename code during a comments-only cleanup.',
     before: `export function handleCheckout(
   req: CheckoutReq,
   opts: { dryRun?: boolean; force?: boolean } = {},
@@ -105,10 +181,20 @@ export async function processOrder(
 
   // Check whether oversell is allowed.
   if (stock < req.qty && !opts.force) return false;
+  if (opts.dryRun) return true;
 
   // Reserve the stock.
   inventory[req.productId] = stock - req.qty;
-  // Subtract quantity.`,
+  // Subtract quantity.
+  try {
+    charge(req.userId, req.unitPrice * req.qty);
+  } catch {
+    inventory[req.productId] = stock;
+    return false;
+  }
+  scheduleConfirm(req.orderId, { afterMs: 2000 });
+  return true;
+}`,
     after: `export function handleCheckout(
   req: CheckoutReq,
   opts: { dryRun?: boolean; force?: boolean } = {},
@@ -120,15 +206,28 @@ export async function processOrder(
   // force is an operations override
   // for VIP oversell.
   if (stock < req.qty && !opts.force) return false;
+  if (opts.dryRun) return true;
 
   // Reserve before charge so concurrent
   // checkouts cannot both pass the stock check.
-  inventory[req.productId] = stock - req.qty;`,
+  // Charge failure restores the brief over-hold.
+  inventory[req.productId] = stock - req.qty;
+  try {
+    charge(req.userId, req.unitPrice * req.qty);
+  } catch {
+    inventory[req.productId] = stock;
+    return false;
+  }
+  // Stripe webhook can race the read model;
+  // see #1842.
+  scheduleConfirm(req.orderId, { afterMs: 2000 });
+  return true;
+}`,
   },
   {
     name: 'jane-street-style',
-    desc: 'Names the domain operation and gives every failure its own type — while the legacy entry point keeps its observable behavior.',
-    note: 'Callers can now tell invalid input from a missing wallet, and NotifyFailedAfterDebit states that the debit committed while notification did not. The legacy process entry point still returns the same values, so nobody migrates.',
+    desc: 'For explicit clarity-first design, refactoring, or review — not an ordinary shape-preserving bug fix. Names the domain operation and makes effects and failures explicit.',
+    note: 'The new API distinguishes invalid input, a missing wallet, and notification failure after debit. In this compatibility example, the full source keeps process as an adapter preserving legacy results and effect order. An approved clean cutover instead migrates callers and deletes the old entry point. Derive genuinely new APIs from a representative caller, not a generic framework.',
     before: `export function process(
   d: any,
   flag = true,
@@ -156,6 +255,7 @@ export async function processOrder(
     after: `export function debitWallet(
   userId: string,
   amount: number,
+  opts: { notify?: boolean } = {},
 ): number {
   if (amount <= 0) throw new InvalidDebit(amount);
   if (!(userId in wallets)) {
@@ -165,13 +265,14 @@ export async function processOrder(
   const balance = wallets[userId] - amount;
   wallets[userId] = balance;
 
-  try {
-    notifyProvider(userId, -amount);
-  } catch (cause) {
-    // debit already committed — carry both facts
-    throw new NotifyFailedAfterDebit(
-      userId, balance, cause,
-    );
+  if (opts.notify ?? true) {
+    try {
+      notifyProvider(userId, -amount);
+    } catch (cause) {
+      throw new NotifyFailedAfterDebit(
+        userId, balance, cause,
+      );
+    }
   }
 
   return balance;
@@ -180,7 +281,7 @@ export async function processOrder(
   {
     name: 'surgical-changes',
     desc: 'Fixes the root cause and leaves everything else alone — no renames, no result-type redesign, no migration the bug never asked for.',
-    note: 'Both diffs fix the missing retry attempt. The first also replaces the public API and forces every caller and test to migrate. The second touches only the causal line, so the review takes seconds.',
+    note: 'The broad approach replaces the API and forces an unrelated migration. The focused change repairs the loop, with a public-boundary regression for all attempts and final-error rethrow in the full example. Reuse still-valid evidence unless a required gate demands a fresh run; after repeated failures at the same gate, test their shared premise rather than patching another symptom.',
     lang: 'diff' as const,
     before: `- export async function deliver(
 -   message: string,
@@ -197,8 +298,8 @@ export async function processOrder(
   },
   {
     name: 'tests-that-matter',
-    desc: 'Proves observable state and the real external boundary. A call-count test stays green while the wrong amount moves.',
-    note: 'The first test stays green when the wrong amount moves, one balance is lost, or the result lies. The second fails in all three cases: it asserts observable state, and mocks only the provider the repo does not own.',
+    desc: 'Writes or reviews tests for observable outcomes, distinct failures, invariants, and boundaries — not call counts or coverage without confidence.',
+    note: 'The stronger test asserts the result, both balances, and the provider payload. Its in-memory wallet proves local behavior, not real-store persistence; the mocked provider does not prove live-provider behavior. Reread persisted or completed state at the required boundary, cover every agreed journey, and keep distinct failures and partial success explicit.',
     before: `it("calls its dependencies", async () => {
   const wallets = { get: vi.fn(), save: vi.fn() };
   const notify = vi.fn();
@@ -236,12 +337,46 @@ export async function processOrder(
   });
 });`,
   },
+  {
+    name: 'verification-planning',
+    desc: 'Plans and carries out acceptance across runtime boundaries, reuses trustworthy evidence, and recovers verification stuck in repeated runs or unclear results. Not routine test authoring, every small fix, or root-cause debugging.',
+    note: 'Illustrative plan, not executed results. Reuse requires the same relevant code, local changes, and material environment; required fresh runs still apply. A controlled provider cannot establish live-provider behavior. For risky changes, trace persisted, wire, and runtime consumers beyond symbol references and prove the safety premise at a meaningful boundary — or state the gap.',
+    lang: 'text' as const,
+    before: `Task: grant and revoke a subscription;
+both must survive reload.
+
+Tests and required integrated check passed.
+API ready; server still running.
+Grant returned HTTP 200.
+Only a Git fetch followed the checks.
+Live-provider access unavailable.
+
+Wait for the server to exit.
+Restart it and repeat unchanged checks.
+Skip persisted state and revoke.
+Call the controlled provider live proof.`,
+    after: `Confirm checked state is still relevant.
+Reuse results unless a fresh run is required.
+Keep the ready service running.
+
+Grant through the admin interface.
+Reload or reread persisted subscription.
+Verify the granted state.
+
+Revoke and reread persisted state.
+Verify the revoked state.
+
+Report local acceptance separately.
+Leave required live evidence unproved
+when live access is unavailable.
+Stop after the agreed proof is complete.`,
+  },
 ];
 ---
 
 <Base
   title="Skills for intentional code"
-  description="Agent skills that push toward code humans can review: clear domain meaning, honest failures, explicit concurrency guarantees, comments that earn their place, and tests that prove real behavior."
+  description="Seven agent skills for intentional code: clear domain meaning, honest failures, concurrency guarantees, useful comments, focused changes, recurring-mistake prevention, and evidence-driven tests and acceptance."
 >
   <header class="reveal text-[13px]" style="--d:0">
     <a
@@ -263,13 +398,16 @@ export async function processOrder(
       with no named invariant, narration comments, and green tests without confidence.
     </p>
     <p class="reveal mt-4 max-w-[64ch] text-[14px] leading-[1.65] text-faint dark:text-dim" style="--d:3">
-      These skills are short on purpose. Each one is exercised on several models, and
-      the skill file stays limited to guidance that transfers across tasks.
+      These skills are short on purpose. The original five — concurrency-invariants,
+      essential-comments, jane-street-style, surgical-changes, and tests-that-matter —
+      were exercised across seven models. New additions and later revisions do not
+      automatically inherit that evidence. Skill files stay limited to guidance
+      that transfers across tasks.
     </p>
     <div class="max-w-[680px]">
       <section class="reveal mt-8" style="--d:4" aria-labelledby="included-heading">
         <h2 id="included-heading" class="text-[12.5px] font-medium text-faint dark:text-dim">
-          Included
+          Included · {skillSummaries.length} skills
         </h2>
         <dl class="mt-3 divide-y divide-line border-y border-line dark:divide-seam dark:border-seam">
           {skillSummaries.map((skill) => (
@@ -300,6 +438,9 @@ export async function processOrder(
       </div>
       <p class="reveal mt-3 text-[12px] leading-relaxed text-faint dark:text-dim" style="--d:6">
         Works with Pi, Claude Code, Cursor, Codex, and other agents that support skills.
+        Choose Intentional Code for the full set, or add <code>--skill essential-comments</code>
+        for one skill. Prefer an explicit invoke such as <code>/skill:essential-comments</code>;
+        automatic triggering depends on the model.
       </p>
     </div>
   </section>
@@ -311,9 +452,15 @@ export async function processOrder(
   {skills.map((s) => <SkillExample {...s} />)}
 
   <footer class="reveal-io mt-24 flex items-baseline justify-between border-t border-line pt-6 text-[12.5px] text-faint dark:border-seam dark:text-dim">
-    <span>MIT</span>
+    <a href="https://github.com/yakoshiq/skills/blob/main/LICENSE" class="hover:text-rose dark:hover:text-bloom">MIT</a>
     <a href="https://github.com/yakoshiq/skills" class="hover:text-rose dark:hover:text-bloom">github.com/yakoshiq/skills</a>
   </footer>
+  <p class="mt-3 text-[12px] leading-relaxed text-faint dark:text-dim">
+    Selected mechanisms adapted from Lauren Tan’s
+    <a href="https://github.com/cursor/plugins/tree/main/pstack" class="hover:text-rose dark:hover:text-bloom">pstack</a>.
+    Sources and upstream MIT notice:
+    <a href="https://github.com/yakoshiq/skills/blob/main/THIRD_PARTY_NOTICES.md" class="hover:text-rose dark:hover:text-bloom">Third-party notices</a>.
+  </p>
 
   <script is:inline>
   {
