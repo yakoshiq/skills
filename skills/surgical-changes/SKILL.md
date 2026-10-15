@@ -23,6 +23,8 @@ Classify each contemplated edit:
 
 Only required and coupled edits belong in the diff. If you cannot explain why a hunk is needed for the request, leave it out.
 
+If repeated fixes fail at the same gate and share a premise, check that premise with a discriminating test or observation before patching again. Do not hard-stop after an arbitrary number of failures or redesign the whole system; continue useful independent work.
+
 ## Change only what the cause requires
 
 - Follow local names, control flow, error style, types, and test idioms, even when you would choose differently in new code.
@@ -33,9 +35,11 @@ Only required and coupled edits belong in the diff. If you cannot explain why a 
 
 ## Verify the seam
 
-- Add or update a focused test that fails before the change when the repo has tests.
+- For a bug, use meaningful existing or new regression coverage that catches the original failure; add a permanent test when important behavior is not already covered. For a feature, verify the changed contract and meaningful boundaries, not just argument wiring.
+- A repository's test suite alone does not require a new permanent test. A concrete runtime scenario or temporary probe can be sufficient when it proves the behavior; say what it established. Keep all required project checks and explicitly requested acceptance gates.
 - Exercise the changed path at the nearest boundary where its behavior is observable; do not broaden into a test-suite redesign.
-- Run the narrowest relevant checks, then inspect the final diff. Every hunk should trace back to the request.
+- Reuse valid verification evidence when the checked state and relevant environment have not changed. Rerun when relevant changes, new risk, unreliable evidence, or an explicit fresh-run gate require it. Preserve a smoke check at the nearest observable boundary when required to prove the changed path.
+- Run required and relevant checks, then inspect the final diff. Every hunk should trace back to the request.
 
 ## Keep discoveries out of the diff
 

@@ -204,3 +204,9 @@ it.each([
 ```
 
 The goal is not fewer tests at any cost. It is fewer tests whose assertions each protect an observable behavior, failure mode, invariant, or boundary that can actually regress.
+
+## Match each journey to its evidence boundary
+
+For an async export request, HTTP 200 may only mean the job was accepted. A meaningful journey checks that the job reaches its terminal state and that the resulting export can be read from storage. A unit test with in-memory storage and a controlled provider can prove request handling and state transitions, but not that the real store persists the artifact; a runtime smoke can prove the deployed path reaches storage, but not that a live external provider works unless it actually exercises one.
+
+For multiple agreed flows, such as creating and cancelling an export, check the promised outcome for each. A green creation test does not establish cancellation behavior. Keep permanent coverage where those outcomes can plausibly regress, and state explicitly which boundary was not exercised rather than implying broader confidence.

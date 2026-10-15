@@ -38,10 +38,12 @@
       "source": "./",
       "skills": [
         "./skills/concurrency-invariants",
+        "./skills/correct",
         "./skills/essential-comments",
         "./skills/jane-street-style",
         "./skills/surgical-changes",
-        "./skills/tests-that-matter"
+        "./skills/tests-that-matter",
+        "./skills/verification-planning"
       ]
     }
   ]

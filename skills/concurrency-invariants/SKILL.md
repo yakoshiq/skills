@@ -23,6 +23,8 @@ Answer only what is live, but inspect every line:
 5. **Scheduling:** What may overlap or reorder? What needs per-key serialization or fencing?
 6. **Interruption:** At each timeout, cancellation, or failure boundary, what may already have happened? What is pending, and who resumes or compensates?
 
+Before adding serialization, ask whether the writers actually need a shared mutable target. Independent, separately owned state may remove the sharing and its coordination; retain synchronization when one canonical or atomic invariant requires it. Do not split a financial invariant merely to avoid a lock.
+
 A timeout or lost response is an unknown outcome unless the API proves the effect was not applied. Name only guarantees the mechanisms really provide.
 
 ## Enforce every boundary

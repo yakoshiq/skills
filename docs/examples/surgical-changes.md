@@ -147,3 +147,13 @@ A concise delivery note can keep the adjacent observation visible without puttin
 > Fixed the retry loop and added a regression covering all attempts plus final-error rethrow. `parseChannel` still collapses unexpected failures into `false`; that is a separate error-policy decision and was left unchanged.
 
 The result is not merely the fewest changed characters. It is the smallest coherent change: root cause, nearest meaningful verification, and no hidden migration.
+
+## A feature does not always need another permanent test
+
+Suppose a small settings change exposes an existing optional `label` through another endpoint. Existing tests already guard the label's serialization and defaulting policy, while a focused runtime probe confirms the new endpoint includes the label when set and omits it by default. If the change only wires that existing behavior to the endpoint and the repo does not require a new test, adding a permanent test of argument forwarding adds little confidence. Record the probe and its result; retain any required project checks and smoke tests.
+
+If later edits change the response serialization or defaulting behavior, that evidence is stale for the changed path and must be refreshed. An unrelated Git operation does not invalidate it.
+
+## Recheck a shared premise after repeated gate failures
+
+If two patches to a cache both fail the same integration check and both assume its key is unique per tenant, inspect real key construction across tenants before another patch. That discriminates the shared premise from another symptom fix; unrelated work can continue while the check runs.

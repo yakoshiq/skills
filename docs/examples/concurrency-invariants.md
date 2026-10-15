@@ -91,6 +91,18 @@ The patch improved replay safety at one owner. It did not define the other owner
 
 The implementation now has seams that enforce those decisions:
 
+### Assumptions to verify for this example
+
+These are environmental and adapter guarantees assumed by this particular design, not guarantees supplied by the TypeScript interfaces and not universal architecture requirements:
+
+- The durable queue does not acknowledge a `partial` result; it retries/redelivers the job, including after worker restart.
+- The shared store durably owns claims and issues a strictly increasing fence on each takeover; it rejects commits from stale fences.
+- The provider honors the stable idempotency key across retries and supports looking up the outcome by that same identity.
+- The payment gateway maps timeout, cancellation during the provider call, and lost responses to `unknown`, never to a confirmed non-charge.
+- The order-state update and outbox insertion commit atomically in the store.
+
+Verify these properties in the actual queue, store, provider, and gateway before relying on the example's guarantees. A different system may enforce equivalent contracts with different mechanisms.
+
 ```ts
 type Claim = {
   orderId: string;
@@ -247,3 +259,7 @@ Focused tests use barriers and fake clocks, not sleeps:
 | Cancellation during charge | Gateway reports unknown; unacknowledged job retries after lease expiry |
 
 The mechanisms are not the contract. The contract explains why stable provider identity, shared ownership, fencing, an atomic local commit, and durable pending work are all required at different boundaries.
+
+## Avoid coordination when state is independent
+
+If workers write separate per-customer output files, give each worker its own file instead of serializing writes through one shared file. Keep shared atomic coordination for the order's balance and charge state: those fields form one financial invariant and cannot safely be split by this example's ownership rule.

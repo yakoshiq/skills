@@ -166,6 +166,16 @@ export function process(d: any, flag = true, mode = 0): any {
 
 The adapter deliberately collapses richer failures because existing callers already depend on that contract. New callers can use the explicit API without silently changing old ones.
 
+## If the approved change is a clean cutover
+
+Compatibility is not automatic. If the task explicitly approves removing `process`, migrate its callers to `debitWallet` and delete `process` rather than keeping an unused shim:
+
+```ts
+const balance = debitWallet(userId, amount, { notify: shouldNotify });
+```
+
+That cutover is a deliberate public API change, not a behavior-preserving refactor. Do not choose it when callers still rely on the old contract or compatibility has not been approved.
+
 ## Why the partial-success error matters
 
 If `notifyProvider` fails after `wallets[userId]` is updated, rollback would be a new business policy, not a refactor. Returning a generic failure from the new API would also hide committed state. `NotifyFailedAfterDebit` states both facts:
@@ -187,3 +197,7 @@ That makes recovery decisions possible without changing effect order.
 | partial success is hidden | committed balance is carried by the notification error |
 
 This is a clarity-first redesign because changing the internal shape is the explicit task. For an ordinary shape-preserving bug fix, `surgical-changes` would be the better skill and this redesign would be out of scope.
+
+## Derive a new API from its caller
+
+For a new reservation API, first sketch `const reservation = reserveRoom({ roomId, dates, guestCount });`. That call makes the needed domain inputs visible; derive a `ReservationRequest` parameter and a result that distinguishes unavailable rooms from infrastructure failure, rather than starting with a generic `execute(data: any)` signature.
